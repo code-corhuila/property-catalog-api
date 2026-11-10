@@ -1,9 +1,50 @@
 # property-catalog-api
 
-> catalog bounded context: service API
+> catalog bounded context: the service that searches and shows the Propiedades
 
-Part of the **LMS Library** distributed system — team `lms-library`, Grupo 2.
-Governance and documentation live in [`library-docs`](https://github.com/code-corhuila/library-docs).
+Part of the **PMS Property** distributed system — team `pms-property`, Grupo 2.
+Governance and documentation live in [`property-docs`](https://github.com/code-corhuila/property-docs).
+
+`catalog-service` is the only service in **Python 3.12 + FastAPI** (ADR-011). It follows
+the same hexagonal layers and the same public contract as the Java services: a consumer
+cannot tell which language it is written in (Annex C).
+
+| Operation | Fiche | Who calls it |
+|---|---|---|
+| `GET /health` | — | Answers without a token, outside `/api/v1` |
+
+Every operation is public. Read-only in MVP 1: the listings come from the seed of
+`property-catalog-db`; this service never migrates.
+
+## Layout (Annex C, ADR-011 rule 2)
+
+```
+src/catalog/adapter/inbound/http/      app.py (correlation, JSON logs, /health), errors.py
+apps/api/__main__.py                   the composition root: concrete types and limits
+tests/                                 pytest: HTTP contract, composition
+```
+
+## Run it
+
+```bash
+pip install '.[test]'
+python -m pytest
+PERSISTENCE=memory python -m apps.api      # on http://localhost:3002
+```
+
+Without `DATABASE_URL` the service does not start; `PERSISTENCE=memory` is for tests and
+local development only, never an environment (norm 5.5.2). The variables are listed in
+`.env.example`.
+
+## The common contract
+
+- **Errors:** every error, including an unknown route, answers with the single envelope
+  `{error, message, details?, traceId}`; the translation happens only in `errors.py`.
+- **Correlation:** the `X-Correlation-Id` received (1 to 128 characters) is reused, or one is
+  generated; it is returned, it is the `traceId`, and it is in every log line.
+- **Logs:** one JSON object per line, with the field names of the Java services
+  (`@timestamp`, `log.level`, `message`, `correlationId`). A 500 carries a neutral message;
+  the detail goes only to the log.
 
 ## Branching
 
@@ -22,4 +63,4 @@ branch into another: `merge develop -> qa` and `merge qa -> main` do not exist i
 `main` requires **1 approval from `ariel5253`**. On `develop` and `qa` the team sets its own review
 rule.
 
-Full policy: `00-governance/branching-policy.md` in `library-docs`.
+Full policy: `00-governance/branching-policy.md` in `property-docs`.
