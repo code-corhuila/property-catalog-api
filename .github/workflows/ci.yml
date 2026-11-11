@@ -19,8 +19,32 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # The integration tests run against the real engine with the database catalog of
+    # property-catalog-db applied (Annex C): the same MongoDB major version, prepared the
+    # way property-infra-mongo prepares the instance (catalog_app with no role).
+    env:
+      TEST_DATABASE_URL: mongodb://localhost:27017/catalog?directConnection=true
+      TEST_DATABASE_USER: catalog_app
+      TEST_DATABASE_PASSWORD: ci-only-app
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: code-corhuila/property-catalog-db
+          ref: develop
+          path: .catalog-db
+      - name: Prepare the instance and apply the database catalog
+        run: |
+          docker run -d --name mongo -p 27017:27017 \
+            -e MONGO_INITDB_ROOT_USERNAME=ci_admin -e MONGO_INITDB_ROOT_PASSWORD=ci-only mongo:7.0
+          admin() { docker exec mongo mongosh --quiet -u ci_admin -p ci-only --authenticationDatabase admin catalog "$@"; }
+          for i in $(seq 1 30); do admin --eval 'db.hello().ok' >/dev/null 2>&1 && break; sleep 2; done
+          admin --eval 'db.createUser({ user: "catalog_app", pwd: "ci-only-app", roles: [] })'
+          docker build -q -t catalog-db-migrate -f .catalog-db/deploy/liquibase.Dockerfile .catalog-db/deploy
+          docker run --rm --network host -v "$PWD/.catalog-db:/workspace:ro" catalog-db-migrate \
+            --search-path=/workspace --changelog-file=changelog/changelog-master.yaml \
+            "--url=mongodb://localhost:27017/catalog?authSource=admin" \
+            --username=ci_admin --password=ci-only update
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

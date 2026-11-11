@@ -5,9 +5,11 @@ import os
 from collections.abc import Mapping
 
 import uvicorn
+from pymongo import MongoClient
 
 from catalog.adapter.inbound.http.app import configure_logging, create_app
 from catalog.adapter.outbound.persistence.memory import InMemoryPropiedadRepository
+from catalog.adapter.outbound.persistence.mongo import MongoPropiedadRepository
 from catalog.application.usecase.catalog import CatalogService
 
 log = logging.getLogger("catalog.app")
@@ -25,7 +27,18 @@ def build_repository(env: Mapping[str, str]):
     if not env.get("DATABASE_URL"):
         raise SystemExit("DATABASE_URL is required: the database catalog of property-catalog-db. "
                          "PERSISTENCE=memory is for tests and local development only.")
-    raise SystemExit("PERSISTENCE=mongo is not available in this version: use PERSISTENCE=memory")
+    return MongoPropiedadRepository(mongo_client(env))
+
+
+def mongo_client(env: Mapping[str, str]) -> MongoClient:
+    """One pool per process with its limits (Annex C, numeral 5.3.10). The client connects
+    lazily: with the database down the service starts and /health reports it."""
+    return MongoClient(
+        env["DATABASE_URL"], username=env.get("DATABASE_USER") or None, password=env.get("DATABASE_PASSWORD") or None,
+        appname="catalog-api", tz_aware=True,
+        maxPoolSize=int(env.get("DB_POOL_MAX", "10")),                 # size of the pool
+        waitQueueTimeoutMS=int(env.get("DB_POOL_WAIT_MS", "5000")),    # waiting for a connection
+        timeoutMS=int(env.get("DB_TIMEOUT_MS", "5000")))               # each operation, as a whole
 
 
 def main() -> None:
