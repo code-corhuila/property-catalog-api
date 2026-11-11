@@ -6,16 +6,17 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
-from apps.api.__main__ import database_check
+from apps.api.__main__ import build_repository
 from catalog.adapter.inbound.http.app import JsonFormatter, create_app
 from catalog.adapter.inbound.http.errors import CORRELATION_ID
+from catalog.adapter.outbound.persistence.memory import InMemoryPropiedadRepository
 
 UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 
 
 @pytest.fixture
 def app():
-    app = create_app(lambda: True)
+    app = create_app(object(), lambda: True)
 
     # Two routes for the tests only: a typed parameter, and a failure nobody expected.
     @app.get("/api/v1/probe")
@@ -43,7 +44,7 @@ def test_health_answers_without_a_token(client):
 def test_health_reports_a_database_that_is_down_inside_the_200():
     def down() -> bool:
         raise ConnectionError("no server")
-    body = TestClient(create_app(down)).get("/health").json()
+    body = TestClient(create_app(object(), down)).get("/health").json()
     assert body["status"] == "degraded" and body["dependencies"]["database"] == "down"
 
 
@@ -102,10 +103,10 @@ def test_each_log_line_is_json_with_the_correlation_id():
 
 def test_without_database_url_the_service_does_not_start():
     with pytest.raises(SystemExit, match="DATABASE_URL is required"):
-        database_check({})
+        build_repository({})
 
 
 def test_memory_only_when_asked_for_explicitly():
-    assert database_check({"PERSISTENCE": "memory"})() is True
+    assert isinstance(build_repository({"PERSISTENCE": "memory"}), InMemoryPropiedadRepository)
     with pytest.raises(SystemExit, match="PERSISTENCE must be"):
-        database_check({"PERSISTENCE": "postgres"})
+        build_repository({"PERSISTENCE": "postgres"})

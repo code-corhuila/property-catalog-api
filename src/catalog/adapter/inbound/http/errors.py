@@ -8,6 +8,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from catalog.domain.model.propiedad import PropiedadNoEncontrada
+
 # The X-Correlation-Id of the request being served: the traceId of the envelope and a
 # field of every log line.
 CORRELATION_ID: ContextVar[str] = ContextVar("correlation_id", default="")
@@ -40,6 +42,10 @@ def install(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def api_error(_: Request, e: ApiError) -> JSONResponse:
         return respond(e.status, e.error, e.message, e.details)
+
+    @app.exception_handler(PropiedadNoEncontrada)
+    async def not_found(_: Request, e: PropiedadNoEncontrada) -> JSONResponse:
+        return respond(404, "NOT_FOUND", "the property does not exist")
 
     @app.exception_handler(RequestValidationError)
     async def invalid(_: Request, e: RequestValidationError) -> JSONResponse:
