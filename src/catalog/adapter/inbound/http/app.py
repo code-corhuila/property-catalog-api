@@ -9,7 +9,8 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
 
-from catalog.adapter.inbound.http import errors
+from catalog.adapter.inbound.http import errors, router
+from catalog.application.port.inbound.catalog import CatalogQueries
 
 HEADER = "X-Correlation-Id"
 log = logging.getLogger("catalog.http")
@@ -46,9 +47,10 @@ def configure_logging(level: str = "INFO") -> None:
     logging.getLogger("uvicorn.access").disabled = True   # the middleware writes the access line
 
 
-def create_app(database_ok: Callable[[], bool]) -> FastAPI:
+def create_app(queries: CatalogQueries, database_ok: Callable[[], bool]) -> FastAPI:
     app = FastAPI(title="catalog-api", docs_url=None, redoc_url=None, openapi_url=None)
     errors.install(app)
+    app.include_router(router.build(queries), prefix="/api/v1")
 
     @app.get("/health")
     def health() -> dict:
