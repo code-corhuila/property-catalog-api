@@ -25,9 +25,10 @@ src/catalog/application/port/inbound/  what catalog offers (CatalogQueries)
 src/catalog/application/port/outbound/ what it needs (PropiedadRepository)
 src/catalog/application/usecase/       CatalogService
 src/catalog/adapter/inbound/http/      app.py (correlation, JSON logs, /health), errors.py, router.py
-src/catalog/adapter/outbound/persistence/  memory.py
+src/catalog/adapter/outbound/persistence/  mongo.py (catalog_app, pool and limits), memory.py
+deploy/Dockerfile, deploy/compose.yml  the image and this service, included by property-infra-postgres
 apps/api/__main__.py                   the composition root: concrete types and limits
-tests/                                 pytest: core, HTTP contract, E-06, composition
+tests/                                 pytest: core, HTTP contract, E-06, composition, MongoDB
 ```
 
 The dependency rule is checked by a test that reads the imports of `domain/` and
@@ -43,7 +44,17 @@ PERSISTENCE=memory python -m apps.api      # an empty catalog, on http://localho
 
 Without `DATABASE_URL` the service does not start; `PERSISTENCE=memory` is for tests and
 local development only, never an environment (norm 5.5.2). The variables are listed in
-`.env.example`.
+`.env.example`. In the platform it runs from `property-infra-postgres`, which includes
+`deploy/compose.yml`, against `mongo:27017` as `catalog_app`.
+
+The integration tests run only when `TEST_DATABASE_URL` points at a MongoDB with the
+database `catalog` of `property-catalog-db` applied (Annex C); otherwise they are skipped.
+The CI prepares one: MongoDB 7, `catalog_app` with no role, and the changelog of
+`property-catalog-db` from `develop`.
+
+```bash
+TEST_DATABASE_URL='mongodb://localhost:27017/catalog?directConnection=true' TEST_DATABASE_PASSWORD=<catalog_app password> python -m pytest
+```
 
 ## The common contract
 
