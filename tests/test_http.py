@@ -106,6 +106,12 @@ def test_without_database_url_the_service_does_not_start():
         build_repository({})
 
 
+def test_mongo_is_the_default_and_connects_lazily():
+    from catalog.adapter.outbound.persistence.mongo import MongoPropiedadRepository
+    repository = build_repository({"DATABASE_URL": "mongodb://nowhere.invalid:27017/catalog"})
+    assert isinstance(repository, MongoPropiedadRepository)
+
+
 def test_memory_only_when_asked_for_explicitly():
     assert isinstance(build_repository({"PERSISTENCE": "memory"}), InMemoryPropiedadRepository)
     with pytest.raises(SystemExit, match="PERSISTENCE must be"):

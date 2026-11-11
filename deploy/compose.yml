@@ -1,0 +1,23 @@
+# This service only. property-infra-postgres includes this file to compose the platform.
+
+services:
+  catalog-api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      PORT: "3002"
+      # The database catalog of the single MongoDB instance (property-infra-mongo), as
+      # catalog_app (Annex J.7). Its collections come from property-catalog-db.
+      DATABASE_URL: mongodb://mongo:27017/catalog?replicaSet=rs0
+      DATABASE_USER: catalog_app
+      DATABASE_PASSWORD: ${CATALOG_APP_PASSWORD:?set CATALOG_APP_PASSWORD}
+    # expose, not ports: only the gateway is reachable from the host. Booking reads
+    # GET /api/v1/propiedades/{id} here, as catalog-api:3002 (ADR-015).
+    expose: ["3002"]
+    networks: [platform]
+
+networks:
+  platform:
+    name: platform
+    external: true
