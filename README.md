@@ -15,8 +15,35 @@ cannot tell which language it is written in (Annex C).
 | `GET /api/v1/propiedades/{id}` | E-06 | The portal, and Booking without a credential when it creates a Reserva (ADR-015) |
 | `GET /health` | — | Answers without a token, outside `/api/v1` |
 
-Every operation is public. Read-only in MVP 1: the listings come from the seed of
-`property-catalog-db`; this service never migrates.
+Every operation is public. The listings come from the seed of `property-catalog-db`;
+this service never migrates.
+
+## The consumer of Booking's events (HU-CAT-004)
+
+A second process of the same image, `python -m apps.consumer` (service `catalog-consumer`
+in `deploy/compose.yml`), reads the queue `catalog.reservas` as the broker user `catalog`
+and keeps the taken ranges of each property, which the search by dates uses:
+
+| Event | What changes in `unavailableRanges` |
+|---|---|
+| `ReservaCreada` | The range of the Reserva is added |
+| `ReservaConfirmada` | Nothing: the range stays |
+| `ReservaCancelada`, `ReservaExpirada` | The range of the Reserva is removed |
+
+- **Once per event.** The `eventId` goes into `processed_events` in the same transaction as
+  the change (MongoDB runs as a replica set for that); a redelivery changes nothing.
+- **Acknowledged only after saving.** A failure to save is retried 3 times (1 s, 2 s, 4 s);
+  then the message is rejected and goes to `catalog.reservas.dlq`, where it stays 7 days.
+  A message that cannot be read goes there at once, and so does an event about a property
+  that does not exist in the catalog: no retry would make it appear. The `.dlq` keeps both
+  7 days for someone to review.
+- **Logs.** One line per event with its `correlationId`, `eventType` and `eventId`; never the body.
+- Catalog never calls Booking: the ranges are a projection, and Booking decides (ADR-015).
+- **Eventually consistent (AP), by design.** Booking guarantees INV-001 with its exclusion
+  constraint; catalog only reflects it. The broker does not promise order, but with a single
+  outbox relay and `prefetch 1` here the events arrive in order in practice. If a late
+  `ReservaCreada` came after its cancellation, it would only hide the property from the
+  search for those dates: it can never allow a double booking. Freed Reservas are not recorded.
 
 ## Layout (Annex C, ADR-011 rule 2)
 
@@ -26,9 +53,12 @@ src/catalog/application/port/inbound/  what catalog offers (CatalogQueries)
 src/catalog/application/port/outbound/ what it needs (PropiedadRepository)
 src/catalog/application/usecase/       CatalogService
 src/catalog/adapter/inbound/http/      app.py (correlation, JSON logs, /health), errors.py, router.py
-src/catalog/adapter/outbound/persistence/  mongo.py (catalog_app, pool and limits), memory.py
-deploy/Dockerfile, deploy/compose.yml  the image and this service, included by property-infra-postgres
-apps/api/__main__.py                   the composition root: concrete types and limits
+src/catalog/adapter/inbound/broker/    consumer.py: the messages of catalog.reservas, retries, dead-letter
+src/catalog/adapter/outbound/persistence/  mongo.py (catalog_app, pool and limits), memory.py,
+                                       mongo_disponibilidad.py (the ranges and processed_events)
+deploy/Dockerfile, deploy/compose.yml  the image, the API and the consumer, included by property-infra-postgres
+apps/api/__main__.py                   the composition root of the API: concrete types and limits
+apps/consumer/__main__.py              the composition root of the consumer
 tests/                                 pytest: core, HTTP contract, E-06, composition, MongoDB
 ```
 
@@ -57,6 +87,10 @@ events writes in transactions), `catalog_app` with no role, and the changelog of
 ```bash
 TEST_DATABASE_URL='mongodb://localhost:27017/catalog?directConnection=true' TEST_DATABASE_PASSWORD=<catalog_app password> python -m pytest
 ```
+
+The tests of the consumer against a real broker also need `TEST_BROKER_URL`, a user that may
+declare queues (`amqp://<user>:<password>@localhost:5672/%2F`): they declare their own queue
+and its dead-letter queue, and delete them at the end. The CI starts RabbitMQ 3.13 for them.
 
 ## The common contract
 

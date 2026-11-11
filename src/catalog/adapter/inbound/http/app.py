@@ -24,9 +24,13 @@ def _utc(seconds: float | None = None) -> str:
 class JsonFormatter(logging.Formatter):
     """One JSON object per line, with the field names of the Java services (ECS)."""
 
+    def __init__(self, service: str = "catalog-api"):
+        super().__init__()
+        self._service = service
+
     def format(self, record: logging.LogRecord) -> str:
         line = {"@timestamp": _utc(record.created), "log.level": record.levelname,
-                "log.logger": record.name, "service.name": "catalog-api", "message": record.getMessage()}
+                "log.logger": record.name, "service.name": self._service, "message": record.getMessage()}
         correlation_id = errors.CORRELATION_ID.get()
         if correlation_id:
             line["correlationId"] = correlation_id
@@ -35,9 +39,9 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(line, ensure_ascii=False)
 
 
-def configure_logging(level: str = "INFO") -> None:
+def configure_logging(level: str = "INFO", service: str = "catalog-api") -> None:
     handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter())
+    handler.setFormatter(JsonFormatter(service))
     root = logging.getLogger()
     root.handlers[:] = [handler]
     root.setLevel(level)
