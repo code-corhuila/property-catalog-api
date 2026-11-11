@@ -11,6 +11,7 @@ cannot tell which language it is written in (Annex C).
 
 | Operation | Fiche | Who calls it |
 |---|---|---|
+| `GET /api/v1/propiedades/{id}` | E-06 | The portal, and Booking without a credential when it creates a Reserva (ADR-015) |
 | `GET /health` | — | Answers without a token, outside `/api/v1` |
 
 Every operation is public. Read-only in MVP 1: the listings come from the seed of
@@ -19,17 +20,25 @@ Every operation is public. Read-only in MVP 1: the listings come from the seed o
 ## Layout (Annex C, ADR-011 rule 2)
 
 ```
-src/catalog/adapter/inbound/http/      app.py (correlation, JSON logs, /health), errors.py
+src/catalog/domain/model/              Propiedad and its typed error: no framework, no driver
+src/catalog/application/port/inbound/  what catalog offers (CatalogQueries)
+src/catalog/application/port/outbound/ what it needs (PropiedadRepository)
+src/catalog/application/usecase/       CatalogService
+src/catalog/adapter/inbound/http/      app.py (correlation, JSON logs, /health), errors.py, router.py
+src/catalog/adapter/outbound/persistence/  memory.py
 apps/api/__main__.py                   the composition root: concrete types and limits
-tests/                                 pytest: HTTP contract, composition
+tests/                                 pytest: core, HTTP contract, E-06, composition
 ```
+
+The dependency rule is checked by a test that reads the imports of `domain/` and
+`application/`: neither may import FastAPI, Pydantic, a driver or an adapter.
 
 ## Run it
 
 ```bash
 pip install '.[test]'
 python -m pytest
-PERSISTENCE=memory python -m apps.api      # on http://localhost:3002
+PERSISTENCE=memory python -m apps.api      # an empty catalog, on http://localhost:3002
 ```
 
 Without `DATABASE_URL` the service does not start; `PERSISTENCE=memory` is for tests and
