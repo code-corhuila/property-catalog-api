@@ -50,7 +50,8 @@ local development only, never an environment (norm 5.5.2). The variables are lis
 
 The integration tests run only when `TEST_DATABASE_URL` points at a MongoDB with the
 database `catalog` of `property-catalog-db` applied (Annex C); otherwise they are skipped.
-The CI prepares one: MongoDB 7, `catalog_app` with no role, and the changelog of
+The CI prepares one: MongoDB 7 as a single-node replica set (the consumer of Booking's
+events writes in transactions), `catalog_app` with no role, and the changelog of
 `property-catalog-db` from `develop`.
 
 ```bash
