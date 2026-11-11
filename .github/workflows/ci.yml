@@ -27,6 +27,9 @@ jobs:
       TEST_DATABASE_URL: mongodb://localhost:27017/catalog?directConnection=true
       TEST_DATABASE_USER: catalog_app
       TEST_DATABASE_PASSWORD: ci-only-app
+      # The tests of the consumer declare their own queue on a real broker (RabbitMQ 3.13,
+      # the version of property-infra-rabbitmq) and delete it at the end.
+      TEST_BROKER_URL: amqp://ci_admin:ci-only@localhost:5672/%2F
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -36,6 +39,8 @@ jobs:
           path: .catalog-db
       - name: Prepare the instance and apply the database catalog
         run: |
+          docker run -d --name rabbitmq -p 5672:5672 \
+            -e RABBITMQ_DEFAULT_USER=ci_admin -e RABBITMQ_DEFAULT_PASS=ci-only rabbitmq:3.13-alpine
           docker run -d --name mongo -p 27017:27017 \
             -e MONGO_INITDB_ROOT_USERNAME=ci_admin -e MONGO_INITDB_ROOT_PASSWORD=ci-only --entrypoint bash mongo:7.0 -c \
             'head -c 756 /dev/urandom | base64 -w 0 > /tmp/k && chmod 400 /tmp/k && chown mongodb:mongodb /tmp/k &&
@@ -57,4 +62,6 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
       - run: pip install '.[test]'
+      - name: Wait for the broker
+        run: for i in $(seq 1 30); do docker exec rabbitmq rabbitmq-diagnostics -q check_port_connectivity && break; sleep 2; done
       - run: python -m pytest
