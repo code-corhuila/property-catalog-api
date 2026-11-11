@@ -30,12 +30,12 @@ def build_repository(env: Mapping[str, str]):
     return MongoPropiedadRepository(mongo_client(env))
 
 
-def mongo_client(env: Mapping[str, str]) -> MongoClient:
+def mongo_client(env: Mapping[str, str], appname: str = "catalog-api") -> MongoClient:
     """One pool per process with its limits (Annex C, numeral 5.3.10). The client connects
     lazily: with the database down the service starts and /health reports it."""
     return MongoClient(
         env["DATABASE_URL"], username=env.get("DATABASE_USER") or None, password=env.get("DATABASE_PASSWORD") or None,
-        appname="catalog-api", tz_aware=True,
+        appname=appname, tz_aware=True,
         maxPoolSize=int(env.get("DB_POOL_MAX", "10")),                 # size of the pool
         waitQueueTimeoutMS=int(env.get("DB_POOL_WAIT_MS", "5000")),    # waiting for a connection
         timeoutMS=int(env.get("DB_TIMEOUT_MS", "5000")))               # each operation, as a whole

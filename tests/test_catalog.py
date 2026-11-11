@@ -26,7 +26,7 @@ def test_an_unknown_id_is_a_typed_error():
 @pytest.mark.parametrize("layer", ["domain", "application"])
 def test_the_core_imports_no_framework_and_no_driver(layer):
     """The dependency rule, checked by reviewing the imports (Annex C; numeral 5.3.3)."""
-    forbidden = ("fastapi", "starlette", "pydantic", "pymongo", "bson", "uvicorn", "jwt", "catalog.adapter")
+    forbidden = ("fastapi", "starlette", "pydantic", "pymongo", "bson", "uvicorn", "jwt", "pika", "catalog.adapter")
     for file in (SRC / layer).rglob("*.py"):
         tree = ast.parse(file.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
