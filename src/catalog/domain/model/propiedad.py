@@ -4,6 +4,7 @@ Plain Python only: this module imports no web framework and no database driver
 (Annex C, the dependency rule; ADR-011, rule 2).
 """
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 
 class PropiedadNoEncontrada(Exception):
@@ -39,3 +40,5 @@ class Propiedad:
     area_m2: int | None = None
     # Ranges [start, end) taken by a PENDIENTE or CONFIRMADA Reserva, as ISO dates.
     unavailable_ranges: tuple[tuple[str, str], ...] = field(default=())
+    # The listings go from the most recent to the oldest (Annex C, "Listados").
+    created_at: datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
