@@ -110,7 +110,8 @@ def build(queries: CatalogQueries) -> APIRouter:
 
     @router.get("/propiedades", response_model=PropiedadPage, response_model_exclude_none=True)
     def buscar(params: Annotated[SearchParams, Query()]) -> PropiedadPage:
-        """E-05: one page of the Propiedades that match, newest first (HU-CAT-001)."""
+        """E-05: one page of the Propiedades that match, newest first (HU-CAT-001). With
+        dates, a Propiedad with a taken range that overlaps them is left out (HU-CAT-003)."""
         if params.ciudad is not None and not params.ciudad.strip():
             raise validation_error([{"field": "ciudad", "message": "must not be blank"}])
         busqueda = Busqueda(page=params.page, limit=params.limit,
