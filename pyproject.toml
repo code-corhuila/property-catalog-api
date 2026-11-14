@@ -1,0 +1,27 @@
+[project]
+name = "property-catalog-api"
+version = "0.1.0"
+description = "catalog-service: search and detail of Propiedades (ADR-011: Python 3.12 + FastAPI)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn==0.34.0",
+    "pymongo==4.10.1",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest==8.3.4",
+    "httpx==0.28.1",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]
