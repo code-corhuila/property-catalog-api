@@ -11,6 +11,7 @@ cannot tell which language it is written in (Annex C).
 
 | Operation | Fiche | Who calls it |
 |---|---|---|
+| `GET /api/v1/propiedades` | E-05 | The search of the portal: `ciudad` (ignoring case and accents), `huespedes` (minimum capacity), `fechaInicio`/`fechaFin`, `page`, `limit`; newest first |
 | `GET /api/v1/propiedades/{id}` | E-06 | The portal, and Booking without a credential when it creates a Reserva (ADR-015) |
 | `GET /health` | — | Answers without a token, outside `/api/v1` |
 

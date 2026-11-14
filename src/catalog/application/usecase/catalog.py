@@ -1,5 +1,6 @@
 """The queries of catalog. Read-only in MVP 1: no use case writes a Propiedad."""
 from catalog.application.port.outbound.ports import PropiedadRepository
+from catalog.domain.model.busqueda import Busqueda, Pagina
 from catalog.domain.model.propiedad import Propiedad, PropiedadNoEncontrada
 
 
@@ -12,3 +13,6 @@ class CatalogService:
         if found is None:
             raise PropiedadNoEncontrada(propiedad_id)
         return found
+
+    def buscar(self, busqueda: Busqueda) -> Pagina:
+        return self._repository.search(busqueda)
