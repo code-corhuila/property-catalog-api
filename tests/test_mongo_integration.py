@@ -2,15 +2,18 @@
 property-catalog-db applied: collections, roles and the seed (Annex C, level
 "Integración"). Skipped, not failed, when TEST_DATABASE_URL is not set.
 
-catalog_app may not delete, so these tests only read the listings of the seed.
+catalog_app may not delete, so these tests read the listings of the seed; the one that
+loads a taken range removes it with $pull, an update catalog_writer allows.
 """
 import os
+from datetime import date
 
 import pytest
+from pymongo import MongoClient
 
 from apps.api.__main__ import build_repository
 from catalog.adapter.outbound.persistence.mongo import MongoPropiedadRepository
-from catalog.domain.model.busqueda import Busqueda
+from catalog.domain.model.busqueda import Busqueda, RangoFechas
 from conftest import CANDELARIA, MISSING, VILLA
 
 pytestmark = pytest.mark.skipif(not os.environ.get("TEST_DATABASE_URL"),
@@ -57,3 +60,22 @@ def test_search_by_capacity_and_pages_newest_first(repository):
     assert first.total == 24 and first.items[0].id == VILLA and len(first.items) == 5
     last = repository.search(Busqueda(page=5, limit=5))
     assert len(last.items) == 4 and last.items[-1].id == CANDELARIA     # the oldest listing
+
+
+def test_search_by_dates_leaves_out_a_listing_with_an_overlapping_range(repository):
+    """HU-CAT-003, scenario 2, with the range loaded as the consumer of tanda 3 will."""
+    client = MongoClient(os.environ["TEST_DATABASE_URL"], username=os.environ.get("TEST_DATABASE_USER", "catalog_app"),
+                         password=os.environ.get("TEST_DATABASE_PASSWORD"))
+    properties = client.get_default_database()["properties"]
+    taken = {"reservationId": "ffffffff-ffff-4fff-8fff-000000000147", "startDate": "2027-03-10", "endDate": "2027-03-15"}
+    properties.update_one({"_id": VILLA}, {"$push": {"unavailableRanges": taken}})
+    try:
+        def ids(inicio, fin):
+            page = repository.search(Busqueda(ciudad="Cartagena", fechas=RangoFechas(inicio, fin)))
+            return {p.id for p in page.items}
+        assert VILLA not in ids(date(2027, 3, 14), date(2027, 3, 16))
+        assert VILLA in ids(date(2027, 3, 15), date(2027, 3, 18))       # arrives the day the other leaves
+        assert len(ids(date(2027, 3, 14), date(2027, 3, 16))) == 5        # the other five of Cartagena
+    finally:
+        properties.update_one({"_id": VILLA}, {"$pull": {"unavailableRanges": {"reservationId": taken["reservationId"]}}})
+        client.close()

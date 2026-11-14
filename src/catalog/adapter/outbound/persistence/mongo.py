@@ -31,6 +31,12 @@ class MongoPropiedadRepository:
             query["city"] = busqueda.ciudad
         if busqueda.huespedes is not None:
             query["capacity"] = {"$gte": busqueda.huespedes}
+        if busqueda.fechas is not None:
+            # Excluded when one of its taken ranges overlaps [inicio, fin): the same half-open
+            # rule as INV-001. The dates are stored as yyyy-mm-dd, so they compare as text.
+            query["unavailableRanges"] = {"$not": {"$elemMatch": {
+                "startDate": {"$lt": busqueda.fechas.fin.isoformat()},
+                "endDate": {"$gt": busqueda.fechas.inicio.isoformat()}}}}
         total = self._properties.count_documents(query, collation=IGNORING_CASE_AND_ACCENTS)
         cursor = (self._properties.find(query, collation=IGNORING_CASE_AND_ACCENTS)
                   .sort(NEWEST_FIRST).skip(busqueda.offset).limit(busqueda.limit))
