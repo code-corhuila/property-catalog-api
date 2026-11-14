@@ -21,11 +21,15 @@ jobs:
     timeout-minutes: 10
     # The integration tests run against the real engine with the database catalog of
     # property-catalog-db applied (Annex C): the same MongoDB major version, prepared the
-    # way property-infra-mongo prepares the instance (catalog_app with no role).
+    # way property-infra-mongo prepares the instance: a single-node replica set, which the
+    # transactions of the event consumer need, and catalog_app with no role.
     env:
       TEST_DATABASE_URL: mongodb://localhost:27017/catalog?directConnection=true
       TEST_DATABASE_USER: catalog_app
       TEST_DATABASE_PASSWORD: ci-only-app
+      # The tests of the consumer declare their own queue on a real broker (RabbitMQ 3.13,
+      # the version of property-infra-rabbitmq) and delete it at the end.
+      TEST_BROKER_URL: amqp://ci_admin:ci-only@localhost:5672/%2F
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -35,10 +39,17 @@ jobs:
           path: .catalog-db
       - name: Prepare the instance and apply the database catalog
         run: |
+          docker run -d --name rabbitmq -p 5672:5672 \
+            -e RABBITMQ_DEFAULT_USER=ci_admin -e RABBITMQ_DEFAULT_PASS=ci-only rabbitmq:3.13-alpine
           docker run -d --name mongo -p 27017:27017 \
-            -e MONGO_INITDB_ROOT_USERNAME=ci_admin -e MONGO_INITDB_ROOT_PASSWORD=ci-only mongo:7.0
+            -e MONGO_INITDB_ROOT_USERNAME=ci_admin -e MONGO_INITDB_ROOT_PASSWORD=ci-only --entrypoint bash mongo:7.0 -c \
+            'head -c 756 /dev/urandom | base64 -w 0 > /tmp/k && chmod 400 /tmp/k && chown mongodb:mongodb /tmp/k &&
+             exec docker-entrypoint.sh mongod --replSet rs0 --keyFile /tmp/k --bind_ip_all'
           admin() { docker exec mongo mongosh --quiet -u ci_admin -p ci-only --authenticationDatabase admin catalog "$@"; }
           for i in $(seq 1 30); do admin --eval 'db.hello().ok' >/dev/null 2>&1 && break; sleep 2; done
+          # With access control a replica set needs a key file: drawn above, inside the container.
+          admin --eval 'rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "localhost:27017" }] })'
+          for i in $(seq 1 30); do [ "$(admin --eval 'db.hello().isWritablePrimary')" = true ] && break; sleep 2; done
           admin --eval 'db.createUser({ user: "catalog_app", pwd: "ci-only-app", roles: [] })'
           docker build -q -t catalog-db-migrate -f .catalog-db/deploy/liquibase.Dockerfile .catalog-db/deploy
           docker run --rm --network host -v "$PWD/.catalog-db:/workspace:ro" catalog-db-migrate \
@@ -51,4 +62,6 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
       - run: pip install '.[test]'
+      - name: Wait for the broker
+        run: for i in $(seq 1 30); do docker exec rabbitmq rabbitmq-diagnostics -q check_port_connectivity && break; sleep 2; done
       - run: python -m pytest

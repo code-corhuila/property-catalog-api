@@ -17,6 +17,23 @@ services:
     expose: ["3002"]
     networks: [platform]
 
+  # The consumer of catalog.reservas (HU-CAT-004): the same image, another process. It keeps
+  # the taken ranges from Booking's events, as the broker user catalog, which may only read
+  # that queue. One per environment. It receives no requests: no port.
+  catalog-consumer:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: ["python", "-m", "apps.consumer"]
+    environment:
+      DATABASE_URL: mongodb://mongo:27017/catalog?replicaSet=rs0
+      DATABASE_USER: catalog_app
+      DATABASE_PASSWORD: ${CATALOG_APP_PASSWORD:?set CATALOG_APP_PASSWORD}
+      BROKER_HOST: rabbitmq
+      BROKER_USER: catalog
+      BROKER_PASSWORD: ${CATALOG_BROKER_PASSWORD:?set CATALOG_BROKER_PASSWORD}
+    networks: [platform]
+
 networks:
   platform:
     name: platform
