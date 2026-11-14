@@ -10,6 +10,7 @@ import pytest
 
 from apps.api.__main__ import build_repository
 from catalog.adapter.outbound.persistence.mongo import MongoPropiedadRepository
+from catalog.domain.model.busqueda import Busqueda
 from conftest import CANDELARIA, MISSING, VILLA
 
 pytestmark = pytest.mark.skipif(not os.environ.get("TEST_DATABASE_URL"),
@@ -43,3 +44,16 @@ def test_a_listing_without_the_optional_fields_maps_them_to_none(repository):
 
 def test_an_unknown_id_is_none(repository):
     assert repository.find_by_id(MISSING) is None
+
+
+def test_search_by_city_ignores_case_and_accents_with_the_collation_of_the_index(repository):
+    page = repository.search(Busqueda(ciudad="BOGOTA"))
+    assert page.total == 6 and {p.city for p in page.items} == {"Bogotá"}
+
+
+def test_search_by_capacity_and_pages_newest_first(repository):
+    assert repository.search(Busqueda(huespedes=8)).total == 4     # capacities 8, 12, 10 and 8
+    first = repository.search(Busqueda(limit=5))
+    assert first.total == 24 and first.items[0].id == VILLA and len(first.items) == 5
+    last = repository.search(Busqueda(page=5, limit=5))
+    assert len(last.items) == 4 and last.items[-1].id == CANDELARIA     # the oldest listing
